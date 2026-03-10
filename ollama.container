@@ -1,0 +1,26 @@
+[Unit]
+Description=Ollama LLM Server with GPU Acceleration
+After=network-online.target
+
+[Container]
+Image=docker.io/ollama/ollama:latest
+ContainerName=ollama
+PublishPort=11434:11434
+Volume=/home/server/server-data/ollama:/root/.ollama:Z
+
+# Expose GPUs for Vulkan (Tahiti XT / FirePro D700)
+AddDevice=/dev/dri
+
+# Force Vulkan backend for Ollama
+Environment=OLLAMA_VULKAN=1
+
+# Disable security labels to allow the container to access hardware devices directly
+SecurityLabel=disable
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target default.target
