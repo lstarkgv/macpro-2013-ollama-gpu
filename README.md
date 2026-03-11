@@ -13,34 +13,42 @@ This fix forces the `amdgpu` driver, which enables Vulkan support and allows Oll
 - **GPUs:** 2x AMD FirePro D700 (6GB GDDR5 VRAM each, total 12GB VRAM)
 - **Architecture:** Tahiti XT (GCN 1.0 / Southern Islands)
 - **OS:** Nobara Linux (Optimized Fedora-based distro)
-- **Ollama Version:** 0.17.0 (native install)
+- **Ollama Version:** 0.17.7 (native install)
 
 ---
 
 ## 📊 Benchmarks & Performance
 
-All benchmarks run with Ollama installed natively, `OLLAMA_VULKAN=1`, dual FirePro D700s active.
+All benchmarks run with Ollama installed natively, `OLLAMA_VULKAN=1`, dual FirePro D700s active via Vulkan.
 
-### qwen3:8b (4.9 GB)
+### qwen3:8b — Recommended Sweet Spot (5.2 GB)
 
 | Metric | Result |
 |--------|--------|
 | **GPU Offloading** | 100% GPU |
 | **VRAM Usage** | ~5.9 GB (split across both D700s) |
-| **Tokens/sec** | **~16–18 tok/sec** |
-| **Total duration (150 tok)** | ~9.5s |
-| **Load time** | ~5.9s (cold start) |
+| **Prompt eval** | **~46 tok/sec** |
+| **Generation** | **~18 tok/sec** |
+| **Load time (cold)** | ~6s |
 
-### qwen2.5-coder:14b (9.0 GB) — Previous Benchmark
+### qwen2.5-coder:14b (9.0 GB)
 
 | Metric | Result |
 |--------|--------|
 | **GPU Offloading** | 49/49 layers (100% GPU) |
-| **VRAM Usage** | ~4.1GB on GPU 0, ~4.1GB on GPU 1 |
-| **Tokens/sec** | **~11.5 tok/sec** |
-| **Total duration** | ~13.8s (150+ tokens) |
+| **VRAM Usage** | ~4.1 GB per GPU |
+| **Prompt eval** | **~43 tok/sec** |
+| **Generation** | **~11.5 tok/sec** |
+| **Load time (cold)** | ~14s |
 
-*On CPU alone, 14B models run at <2 tok/sec. This fix makes the Trashcan a viable local LLM workstation in 2026.*
+*On CPU alone these models run at <2 tok/sec. This fix makes the Trashcan a genuinely useful local LLM workstation in 2026.*
+
+### Compatibility Notes
+
+- **qwen3:8b** — fully working, best balance of speed and capability
+- **qwen2.5-coder:14b** — fully working, great for code tasks
+- **qwen3.5:9b** — fits in VRAM but triggers a GPU hang (`amdgpu: Fence fallback timer expired`) on Tahiti GCN 1.0 due to new tensor ops in the `qwen35` GGUF architecture. CPU-only fallback works at ~2–3 tok/sec.
+- Any model requiring ROCm (e.g. ACE-Step) will not run on GPU — Tahiti is not supported by ROCm 6.x. Vulkan is the only GPU path.
 
 ---
 

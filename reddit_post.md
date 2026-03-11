@@ -2,80 +2,84 @@
 
 Hey everyone! I finally managed to get full GPU acceleration working for **Ollama** on the legendary **Mac Pro 6.1 (2013 "Trashcan")** running Nobara Linux (and it should work on other distros too).
 
-The problem with these machines is that they have dual **AMD FirePro D700s (Tahiti XT)**. By default, Linux uses the legacy `radeon` driver for these cards. While `radeon` works for display, it **does not support Vulkan or ROCm**, meaning Ollama defaults to the CPU, which is slow as molasses.
+The problem with these machines is that they have dual **AMD FirePro D700s (Tahiti XT)**. By default, Linux uses the legacy `radeon` driver for these cards. While `radeon` works for display, it **does not support Vulkan or ROCm**, meaning Ollama defaults to the CPU, which is painfully slow.
 
 ### My Setup:
 - **Model:** Mac Pro 6,1 (Late 2013)
 - **CPU:** Xeon E5-1680 v2 (8C/16T @ 3.0 GHz)
 - **RAM:** 32GB
 - **GPU:** Dual AMD FirePro D700 (6GB each, 12GB total VRAM)
-- **OS:** Nobara Linux (Fedora 40/41 base)
-- **Ollama:** 0.17.0 — **native install** (no Docker/Podman needed!)
+- **OS:** Nobara Linux (Fedora base, Kernel 6.18+)
+- **Ollama:** 0.17.7 — **native install** (no Docker/Podman needed)
 
 ### The Solution:
-Force the `amdgpu` driver for the Southern Islands (SI) architecture. Once `amdgpu` is active, Vulkan is enabled, and Ollama picks up both GPUs automatically!
+Force the `amdgpu` driver for the Southern Islands (SI) architecture. Once `amdgpu` is active, Vulkan is enabled and Ollama picks up both GPUs automatically via `OLLAMA_VULKAN=1`.
 
-### Updated Performance Benchmarks:
+### Actual Benchmarks (measured, not estimated):
 
-**qwen3:8b** (4.9 GB model):
-- GPU Offload: 100%
+**qwen3:8b** — the sweet spot for this hardware:
+- Prompt eval: **~46 tok/sec**
+- Generation: **~18 tok/sec**
 - VRAM: ~5.9 GB split across both D700s
-- Speed: **~16–18 tokens/second**
+- 100% GPU offload
 
-**qwen2.5-coder:14b** (9 GB model):
-- GPU Offload: 100% (49/49 layers)
-- VRAM: ~4.1 GB per GPU
-- Speed: **~11.5 tokens/second**
+**qwen2.5-coder:14b** — for heavier code tasks:
+- Prompt eval: **~43 tok/sec**
+- Generation: **~11.5 tok/sec**
+- VRAM: ~8.3 GB split across both D700s
+- 100% GPU offload (49/49 layers)
 
-On CPU alone, these models run at <2 tok/sec. This fix makes the Trashcan a genuinely useful local LLM workstation in 2026!
+On CPU alone these models run at <2 tok/sec. This fix makes the Trashcan a genuinely useful local LLM workstation in 2026.
+
+**One gotcha:** qwen3.5:9b technically fits in VRAM but causes a GPU hang on Tahiti (`amdgpu: Fence fallback timer expired on ring gfx`) — the new qwen35 GGUF architecture uses tensor ops that GCN 1.0 can't handle via Vulkan. Stick with qwen3:8b or qwen2.5 models.
 
 ### How to do it:
 
 **1. Update Kernel Parameters**
 
-Add these to your GRUB configuration (`/etc/default/grub`):
+Add to `/etc/default/grub`:
 ```
-radeon.si_support=0 amdgpu.si_support=1
+GRUB_CMDLINE_LINUX_DEFAULT="... radeon.si_support=0 amdgpu.si_support=1"
 ```
 
-On Fedora/Nobara, or just use the script in the repo:
+Or use the automated script in the repo:
 ```bash
 sudo bash setup-gpu.sh
 sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 sudo reboot
 ```
 
-**2. Install Ollama Natively**
+**2. Verify the driver switched**
+```bash
+lspci -k | grep -A 3 -E "(VGA|3D)"
+# Should show: Kernel driver in use: amdgpu
+```
+
+**3. Install Ollama natively**
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-**3. Add OLLAMA_VULKAN=1 to the systemd service**
+**4. Add OLLAMA_VULKAN=1 to the systemd service**
 
-Edit `/etc/systemd/system/ollama.service` and add:
-```
+Edit `/etc/systemd/system/ollama.service`:
+```ini
 Environment="OLLAMA_VULKAN=1"
 ```
 
-Then:
 ```bash
 sudo systemctl daemon-reload && sudo systemctl restart ollama
 ```
 
-**4. Verify**
+**5. Pull and run**
 ```bash
-lspci -k | grep -A 3 -E "(VGA|3D)"
-# Should show: Kernel driver in use: amdgpu
-
-ollama ps
-# Should show: 100% GPU
+ollama pull qwen3:8b
+ollama run qwen3:8b "hello"
+ollama ps  # should show 100% GPU
 ```
 
-The D700s show up as **Vulkan0** and **Vulkan1** in Ollama logs — both GPUs fully utilized.
-
-If you prefer Docker/Podman containers, I've got configs for that too — see the repo for `ollama.container` (Podman Quadlet) and `docker-compose.yml`.
-
-Full repo with scripts, configs, and TUI: https://github.com/manu7irl/macpro-2013-ollama-gpu
+Full repo with setup script, TUI, Podman Quadlet and Docker Compose configs:
+https://github.com/manu7irl/macpro-2013-ollama-gpu
 
 Hope this helps any fellow Trashcan owners out there!
 
