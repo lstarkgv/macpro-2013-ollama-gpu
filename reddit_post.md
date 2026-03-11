@@ -10,45 +10,73 @@ The problem with these machines is that they have dual **AMD FirePro D700s (Tahi
 - **RAM:** 32GB
 - **GPU:** Dual AMD FirePro D700 (6GB each, 12GB total VRAM)
 - **OS:** Nobara Linux (Fedora 40/41 base)
+- **Ollama:** 0.17.0 — **native install** (no Docker/Podman needed!)
 
 ### The Solution:
-We need to force the `amdgpu` driver for the Southern Islands (SI) architecture. Once `amdgpu` is active, Vulkan is enabled, and Ollama picks up both GPUs automatically!
+Force the `amdgpu` driver for the Southern Islands (SI) architecture. Once `amdgpu` is active, Vulkan is enabled, and Ollama picks up both GPUs automatically!
 
-### Performance (The Proof):
-I'm currently testing **`qwen2.5-coder:14b`** (9GB model). 
-- **GPU Offload:** 100% (49/49 layers)
-- **VRAM Split:** Perfectly balanced across both D700s (~4GB each)
-- **Speed:** **~11.5 tokens/second** 🚀
-- **Total Response Time:** ~13.8 seconds for a standard coding prompt.
+### Updated Performance Benchmarks:
 
-On CPU alone, this model was barely usable at <2 tokens/sec. This fix makes the Trashcan a viable local LLM workstation in 2026!
+**qwen3:8b** (4.9 GB model):
+- GPU Offload: 100%
+- VRAM: ~5.9 GB split across both D700s
+- Speed: **~16–18 tokens/second**
+
+**qwen2.5-coder:14b** (9 GB model):
+- GPU Offload: 100% (49/49 layers)
+- VRAM: ~4.1 GB per GPU
+- Speed: **~11.5 tokens/second**
+
+On CPU alone, these models run at <2 tok/sec. This fix makes the Trashcan a genuinely useful local LLM workstation in 2026!
 
 ### How to do it:
 
 **1. Update Kernel Parameters**
-Add these to your GRUB configuration:
-`radeon.si_support=0 amdgpu.si_support=1`
 
-On Fedora/Nobara:
-```bash
-sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="radeon.si_support=0 amdgpu.si_support=1 /' /etc/default/grub
-sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+Add these to your GRUB configuration (`/etc/default/grub`):
+```
+radeon.si_support=0 amdgpu.si_support=1
 ```
 
-**2. Reboot**
-`sudo reboot`
+On Fedora/Nobara, or just use the script in the repo:
+```bash
+sudo bash setup-gpu.sh
+sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+sudo reboot
+```
 
-**3. Container Config (Crucial!)**
-If you're running Ollama in a container (Podman or Docker), you MUST:
-- Pass `/dev/dri` to the container.
-- Set `OLLAMA_VULKAN=1`.
-- Disable security labels (SecurityLabel=disable in Quadlet).
+**2. Install Ollama Natively**
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
 
-**Result:**
-My D700s are now identified as **Vulkan0** and **Vulkan1** in Ollama logs, and they split the model VRAM perfectly! 🚀
+**3. Add OLLAMA_VULKAN=1 to the systemd service**
 
-I've put together a GitHub-ready folder with scripts and configs here: [Link to your repo]
+Edit `/etc/systemd/system/ollama.service` and add:
+```
+Environment="OLLAMA_VULKAN=1"
+```
 
-Hope this helps any fellow Trashcan owners out there trying to run local LLMs!
+Then:
+```bash
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+```
 
-#MacPro #Linux #Ollama #SelfHosted #AMD #FireProD700
+**4. Verify**
+```bash
+lspci -k | grep -A 3 -E "(VGA|3D)"
+# Should show: Kernel driver in use: amdgpu
+
+ollama ps
+# Should show: 100% GPU
+```
+
+The D700s show up as **Vulkan0** and **Vulkan1** in Ollama logs — both GPUs fully utilized.
+
+If you prefer Docker/Podman containers, I've got configs for that too — see the repo for `ollama.container` (Podman Quadlet) and `docker-compose.yml`.
+
+Full repo with scripts, configs, and TUI: https://github.com/manu7irl/macpro-2013-ollama-gpu
+
+Hope this helps any fellow Trashcan owners out there!
+
+#MacPro #Linux #Ollama #SelfHosted #AMD #FireProD700 #LocalLLM
