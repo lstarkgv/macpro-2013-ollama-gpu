@@ -24,21 +24,38 @@ fi
 echo "[1/5] Updating package list..."
 apt update
 
-# Step 2: Install required packages
-echo "[2/5] Installing required packages..."
-apt install -y whiptail git curl docker.io docker-compose-v2 python3-pip
+# Step 2: Remove conflicting containerd
+echo "[2/6] Removing conflicting containerd (if present)..."
+apt remove -y containerd || true
 
-# Step 3: Enable and start Docker
-echo "[3/5] Configuring Docker..."
+# Step 3: Install Docker from official repository
+echo "[3/6] Installing Docker from official repository..."
+# Add Docker's official GPG key
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add Docker repository
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Update and install Docker
+apt update
+apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Step 4: Enable and start Docker
+echo "[4/6] Configuring Docker..."
 systemctl enable docker
 systemctl start docker
 
-# Step 4: Install Vulkan support
-echo "[4/5] Installing Vulkan support..."
+# Step 5: Install Vulkan support
+echo "[5/6] Installing Vulkan support..."
 apt install -y vulkan-tools mesa-vulkan-drivers vulkan-validationlayers
 
-# Step 5: Configure GPU driver
-echo "[5/5] Configuring GPU driver..."
+# Step 6: Configure GPU driver
+echo "[6/6] Configuring GPU driver..."
 if grep -q "amdgpu.si_support=1" /etc/default/grub; then
     echo "GPU parameters already configured in GRUB."
 else

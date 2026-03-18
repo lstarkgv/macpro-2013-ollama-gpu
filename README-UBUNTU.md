@@ -10,28 +10,37 @@ Configuración para habilitar aceleración GPU en Ollama para Mac Pro 2013 con A
 
 ## Instalación
 
-### 1. Instalar dependencias
+### Opción A: Instalación completa (recomendado)
+
+Si no tienes Docker instalado o tienes problemas con `containerd`:
 
 ```bash
+chmod +x install-ubuntu.sh
+sudo bash install-ubuntu.sh
+```
+
+Este script:
+- Elimina el `containerd` nativo que causa conflictos
+- Instala Docker desde el repositorio oficial
+- Configura Vulkan y el driver amdgpu
+
+### Opción B: Solo configuración GPU (si ya tienes Docker)
+
+```bash
+chmod +x install-ubuntu-no-docker.sh
+sudo bash install-ubuntu-no-docker.sh
+```
+
+### Opción C: Configuración manual
+
+```bash
+# 1. Instalar dependencias
 sudo apt update
-sudo apt install -y whiptail git docker.io docker-compose
-```
+sudo apt install -y whiptail git vulkan-tools mesa-vulkan-drivers
 
-### 2. Habilitar el driver amdgpu
-
-```bash
-# Dar permisos de ejecución
+# 2. Habilitar el driver amdgpu
 chmod +x setup-gpu-ubuntu.sh
-
-# Ejecutar el script
 sudo bash setup-gpu-ubuntu.sh
-```
-
-O usa la interfaz TUI:
-
-```bash
-chmod +x tui-ubuntu.sh
-./tui-ubuntu.sh
 ```
 
 ### 3. Reiniciar
@@ -64,6 +73,41 @@ docker-compose up -d
 | qwen2.5-coder:14b | ~43 tok/s | ~11.5 tok/s |
 
 ## Solución de Problemas
+
+### Error: "containerd.io : Entra en conflicto: containerd"
+
+Ubuntu Server incluye `containerd` por defecto, lo cual causa conflicto con Docker. Soluciones:
+
+**Opción 1: Usar el script actualizado (recomendado)**
+```bash
+sudo bash install-ubuntu.sh
+```
+
+**Opción 2: Resolver manualmente**
+```bash
+# Eliminar containerd nativo
+sudo apt remove containerd
+
+# Agregar repositorio oficial de Docker
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Agregar repositorio
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Instalar Docker
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+**Opción 3: Omitir instalación de Docker**
+```bash
+sudo bash install-ubuntu-no-docker.sh
+```
 
 ### El driver radeon sigue cargándose
 
